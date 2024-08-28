@@ -241,24 +241,28 @@ def chunks(iterable, n):
     retry=TENACITY_RETRY_EXCEPTIONS,
     reraise=True,
 )
+async def _missing_chunk(session, build_url, chunk, headers):
+    wanted_json = json.dumps({"wanted": chunk}).encode("utf-8")
+    data = gzip.compress(wanted_json)
+
+    resp = await session.get(build_url + "/missing_objects", data=data, headers=headers)
+    async with resp:
+        if resp.status != 200:
+            raise ApiError(resp, await resp.text())
+
+        return await resp.json()
+
+
 async def missing_objects(session, build_url, token, wanted):
     missing = []
     for chunk in chunks(wanted, 2000):
-        wanted_json = json.dumps({"wanted": chunk}).encode("utf-8")
-        data = gzip.compress(wanted_json)
         headers = {
             "Authorization": "Bearer " + token,
             "Content-Encoding": "gzip",
             "Content-Type": "application/json",
         }
-        resp = await session.get(
-            build_url + "/missing_objects", data=data, headers=headers
-        )
-        async with resp:
-            if resp.status != 200:
-                raise ApiError(resp, await resp.text())
-            data = await resp.json()
-            missing.extend(data["missing"])
+        data = await _missing_chunk(session, build_url, chunk, headers)
+        missing.extend(data["missing"])
     return missing
 
 
