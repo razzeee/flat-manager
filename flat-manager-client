@@ -247,6 +247,8 @@ async def _missing_chunk(session, build_url, chunk, headers):
 
     resp = await session.get(build_url + "/missing_objects", data=data, headers=headers)
     async with resp:
+        if resp.status >= 500:
+            raise ServerApiError(resp, await resp.text())
         if resp.status != 200:
             raise ApiError(resp, await resp.text())
 
